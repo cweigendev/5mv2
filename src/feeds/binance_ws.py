@@ -100,6 +100,21 @@ class BinanceFeed:
         self._running = False
         await self._cleanup()
 
-    def get_price(self, symbol: str) -> float | None:
-        """Get the latest price for a symbol."""
-        return self.prices.get(symbol.lower())
+    def get_price(self, symbol: str, max_age_seconds: float = 5.0) -> float | None:
+        """Get the latest price for a symbol, or None if stale.
+
+        Args:
+            symbol: Trading pair (e.g., "btcusdt").
+            max_age_seconds: Maximum age of price data before considered stale.
+                Set to 0 to skip staleness check (used in backtesting).
+        """
+        symbol = symbol.lower()
+        price = self.prices.get(symbol)
+        if price is None:
+            return None
+        if max_age_seconds > 0:
+            age = time.time() - self.last_update.get(symbol, 0)
+            if age > max_age_seconds:
+                logger.warning(f"Binance price for {symbol} is {age:.1f}s stale, skipping")
+                return None
+        return price

@@ -66,7 +66,7 @@ class BotConfig:
     # Minimum volatility floor in bps (prevents division by near-zero).
     # Lowered from 5.0 to 2.0 — crypto 1s returns are typically 1-20 bps.
     # A floor of 5 made the model overconfident in calm periods.
-    min_volatility_bps: float = 2.0
+    min_volatility_bps: float = 1.0
 
     # Sigmoid scaling factor for z-score → probability conversion.
     sigmoid_scale: float = 0.5

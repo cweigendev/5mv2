@@ -354,10 +354,16 @@ class Backtester:
                 ask = edge_result.ask_up if best_side == "up" else edge_result.ask_down
                 mode = edge_result.opportunity.value
 
+                # Prevent double-entry: don't buy the same side twice.
+                # Only allow adding to existing position via spread capture (opposite side).
+                if edge_result.opportunity in (OpportunityType.DIRECTIONAL, OpportunityType.STALE_SNIPE):
+                    if best_side == "up" and interval.up_shares > 0:
+                        continue
+                    if best_side == "down" and interval.down_shares > 0:
+                        continue
+
                 # Spread capture: only if we hold one side, the edge calculator
                 # flagged SPREAD_CAPTURE, AND the paired cost is actually cheap.
-                # We no longer override NONE/DIRECTIONAL with a spread capture —
-                # the edge calculator must have classified it as SPREAD_CAPTURE.
                 if edge_result.opportunity == OpportunityType.SPREAD_CAPTURE:
                     if interval.up_shares > 0 and interval.down_shares > 0:
                         continue  # Already have both sides, skip

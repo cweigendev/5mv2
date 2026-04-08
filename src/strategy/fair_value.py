@@ -15,7 +15,7 @@ class FairValueModel:
 
     def __init__(
         self,
-        min_volatility_bps: float = 2.0,
+        min_volatility_bps: float = 1.0,
         sigmoid_scale: float = 0.5,
         volatility_window: int = 30,
         interval_duration: int = 300,
@@ -51,8 +51,9 @@ class FairValueModel:
         abs_devs = sorted(abs(r - median) for r in sorted_returns)
         mad = abs_devs[len(abs_devs) // 2]
 
-        # MAD to std dev conversion (for normal distribution, std ≈ 1.4826 * MAD)
-        vol = mad * 1.4826
+        # MAD to std dev conversion. Standard factor is 1.4826 for normal
+        # distributions, but crypto returns have fat tails, so we use ~1.2.
+        vol = mad * 1.2
         return max(vol, self.min_volatility_bps)
 
     def compute(

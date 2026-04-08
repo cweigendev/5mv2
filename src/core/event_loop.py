@@ -167,8 +167,18 @@ class TradingBot:
                 # Cleanup old resolved markets
                 self.market_tracker.cleanup_resolved()
 
+                # Reset error counter on successful iteration
+                self._consecutive_errors = 0
+
+            except KeyError as e:
+                logger.error(f"Trading loop KeyError (likely unknown asset): {e}")
             except Exception as e:
-                logger.error(f"Trading loop error: {e}")
+                logger.error(f"Trading loop error: {e}", exc_info=True)
+                self._consecutive_errors = getattr(self, '_consecutive_errors', 0) + 1
+                if self._consecutive_errors >= 10:
+                    logger.critical("10 consecutive trading loop errors — halting bot")
+                    self._running = False
+                    break
 
             # Aim for 1-second tick rate
             elapsed = time.time() - loop_start
