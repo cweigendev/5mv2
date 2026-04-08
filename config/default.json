@@ -1,0 +1,21 @@
+{
+  "assets": ["BTC", "ETH", "SOL", "XRP"],
+  "min_edge_threshold": 0.20,
+  "stale_snipe_threshold": 0.40,
+  "max_paired_cost": 0.95,
+  "default_clip_size": 15,
+  "inter_clip_delay_ms": 100,
+  "per_market_budget": 150.0,
+  "min_seconds_remaining": 30,
+  "entry_delay_seconds": 10,
+  "max_daily_loss": 500.0,
+  "max_concurrent_markets": 10,
+  "max_asset_exposure": 1000.0,
+  "consecutive_loss_cooldown": 5,
+  "cooldown_duration_seconds": 300,
+  "min_volatility_bps": 5.0,
+  "sigmoid_scale": 0.5,
+  "volatility_window_seconds": 30,
+  "log_level": "INFO",
+  "trade_log_db": "trades.db"
+}
