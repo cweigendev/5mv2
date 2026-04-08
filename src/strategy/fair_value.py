@@ -15,7 +15,7 @@ class FairValueModel:
 
     def __init__(
         self,
-        min_volatility_bps: float = 5.0,
+        min_volatility_bps: float = 2.0,
         sigmoid_scale: float = 0.5,
         volatility_window: int = 30,
         interval_duration: int = 300,
@@ -38,15 +38,21 @@ class FairValueModel:
 
     @property
     def volatility_bps(self) -> float:
-        """Rolling standard deviation of 1-second returns in basis points."""
-        if len(self._returns_buffer) < 2:
+        """Rolling standard deviation of 1-second returns in basis points.
+
+        Uses median absolute deviation (MAD) instead of std dev to resist
+        single-tick outliers that would otherwise dominate a 30-sample window.
+        """
+        if len(self._returns_buffer) < 5:
             return self.min_volatility_bps
 
-        mean = sum(self._returns_buffer) / len(self._returns_buffer)
-        variance = sum((r - mean) ** 2 for r in self._returns_buffer) / (
-            len(self._returns_buffer) - 1
-        )
-        vol = math.sqrt(variance)
+        sorted_returns = sorted(self._returns_buffer)
+        median = sorted_returns[len(sorted_returns) // 2]
+        abs_devs = sorted(abs(r - median) for r in sorted_returns)
+        mad = abs_devs[len(abs_devs) // 2]
+
+        # MAD to std dev conversion (for normal distribution, std ≈ 1.4826 * MAD)
+        vol = mad * 1.4826
         return max(vol, self.min_volatility_bps)
 
     def compute(
@@ -74,6 +80,7 @@ class FairValueModel:
 
         # Time factor: sqrt of fraction of interval remaining.
         # More time remaining = more uncertainty = probabilities closer to 0.5.
+        # Less time remaining = price is "locked in" = probabilities more extreme.
         time_factor = math.sqrt(seconds_remaining / self.interval_duration)
 
         # Volatility-adjusted z-score

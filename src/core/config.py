@@ -42,8 +42,9 @@ class BotConfig:
     min_seconds_remaining: int = 30
 
     # Wait this many seconds into the interval before entering,
-    # to let the reference price establish and spot price move.
-    entry_delay_seconds: int = 10
+    # to let the volatility model warm up with a few data points.
+    # Reduced from 10 to 5 — no need to wait longer.
+    entry_delay_seconds: int = 5
 
     # --- Risk ---
     # Stop trading if session P&L drops below this (negative = loss).
@@ -63,7 +64,9 @@ class BotConfig:
 
     # --- Fair Value Model ---
     # Minimum volatility floor in bps (prevents division by near-zero).
-    min_volatility_bps: float = 5.0
+    # Lowered from 5.0 to 2.0 — crypto 1s returns are typically 1-20 bps.
+    # A floor of 5 made the model overconfident in calm periods.
+    min_volatility_bps: float = 2.0
 
     # Sigmoid scaling factor for z-score → probability conversion.
     sigmoid_scale: float = 0.5

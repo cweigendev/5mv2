@@ -2,7 +2,7 @@
 Entry decision engine: determines WHEN and HOW MUCH to trade.
 
 Hybrid strategy combining:
-- stingo43's directional conviction (high edge → aggressive entry)
+- stingo43's directional conviction (high edge -> aggressive entry)
 - eknih's spread capture discipline (both sides < $1.00 combined)
 - Both bots' stale price sniping behavior
 """
@@ -28,7 +28,7 @@ class EntryLogic:
         default_clip_size: int = 15,
         per_market_budget: float = 150.0,
         min_seconds_remaining: int = 30,
-        entry_delay_seconds: int = 10,
+        entry_delay_seconds: int = 5,
         max_paired_cost: float = 0.95,
         interval_duration: int = 300,
     ):
@@ -76,8 +76,7 @@ class EntryLogic:
         # --- Mode 1: Stale Price Snipe ---
         if edge_result.opportunity == OpportunityType.STALE_SNIPE:
             side = edge_result.best_side
-            ask = self._get_ask(edge_result, side)
-            # Smaller size for stale snipes (higher risk of bad fill)
+            ask = edge_result.ask_up if side == "up" else edge_result.ask_down
             size = min(self.default_clip_size, int(remaining_budget / max(ask, 0.01)))
             if size > 0:
                 return EntrySignal(
@@ -92,7 +91,7 @@ class EntryLogic:
         # --- Mode 2: Directional Entry ---
         if edge_result.opportunity == OpportunityType.DIRECTIONAL:
             side = edge_result.best_side
-            ask = self._get_ask(edge_result, side)
+            ask = edge_result.ask_up if side == "up" else edge_result.ask_down
             size = min(self.default_clip_size, int(remaining_budget / max(ask, 0.01)))
             if size > 0:
                 return EntrySignal(
@@ -111,7 +110,7 @@ class EntryLogic:
             and held_vwap is not None
         ):
             opposite = "down" if held_side == "up" else "up"
-            opposite_ask = self._get_ask(edge_result, opposite)
+            opposite_ask = edge_result.ask_down if opposite == "down" else edge_result.ask_up
             paired_cost = held_vwap + opposite_ask
 
             if paired_cost < self.max_paired_cost:
@@ -130,44 +129,3 @@ class EntryLogic:
                     )
 
         return None
-
-    @staticmethod
-    def _get_ask(edge_result: EdgeResult, side: str) -> float:
-        """Derive the market ask price from edge result."""
-        if side == "up":
-            # up_edge = fair_up - ask_up, so ask_up = fair_up - up_edge
-            # But we need the actual ask. We reconstruct it:
-            # fair_up + fair_down = 1.0
-            # paired_cost = ask_up + ask_down
-            # up_edge = fair_up - ask_up
-            # So ask_up = fair_up - up_edge
-            # And fair_up = (1 + up_edge - down_edge + paired_cost) / 2
-            # Simpler: ask = (paired_cost + up_edge - down_edge) / 2 ... no.
-            # Actually we can just compute: ask = fair - edge
-            # fair_up = up_edge + ask_up -> ask_up = fair_up - up_edge
-            # But we don't store fair directly. We do know:
-            # fair_up = up_edge + ask_up
-            # ask_up = paired_cost - ask_down
-            # This is circular without the original ask. Store it instead.
-            #
-            # For now, use: ask_up = (paired_cost - down_edge + up_edge) ...
-            # Let's just return the reconstructed ask.
-            # fair_up = up_edge + ask_up, fair_down = down_edge + ask_down
-            # fair_up + fair_down = 1
-            # (up_edge + ask_up) + (down_edge + ask_down) = 1
-            # up_edge + down_edge + paired_cost = 1
-            # ask_up = paired_cost - ask_down
-            # ask_down = paired_cost - ask_up
-            # fair_up = up_edge + ask_up
-            # We need ask_up:
-            # From: up_edge + down_edge + paired_cost = 1
-            # ask_up = (1 - up_edge - down_edge) ... no, paired_cost = ask_up + ask_down
-            # So: up_edge + down_edge + ask_up + ask_down = 1
-            # ask_up = (1 - up_edge - down_edge - ask_down)... still circular.
-            #
-            # The clean fix: pass asks directly. For now, approximate:
-            fair_up = 0.5 + (edge_result.up_edge - edge_result.down_edge) / 2
-            return max(fair_up - edge_result.up_edge, 0.01)
-        else:
-            fair_down = 0.5 + (edge_result.down_edge - edge_result.up_edge) / 2
-            return max(fair_down - edge_result.down_edge, 0.01)

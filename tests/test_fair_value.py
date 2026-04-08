@@ -19,7 +19,7 @@ def test_equal_price_gives_fifty_fifty():
 def test_higher_spot_favors_up():
     """When spot > reference, P(Up) should be > 0.5."""
     model = FairValueModel()
-    # Feed some prices to build volatility
+    # Feed enough prices to build volatility (need >= 5 for MAD-based vol)
     for p in [50000 + i * 10 for i in range(31)]:
         model.update_price(p)
     prob_up, prob_down = model.compute(

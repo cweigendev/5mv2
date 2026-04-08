@@ -340,54 +340,61 @@ class Backtester:
                     market_ask_down=book.down_best_ask,
                 )
 
-                if edge_result.opportunity == OpportunityType.NONE:
-                    continue
-
                 # Budget check
                 if interval.total_spend >= config.per_market_budget:
                     continue
 
                 remaining_budget = config.per_market_budget - interval.total_spend
+
+                # Determine what to trade.
+                # The edge calculator already filters for conviction
+                # (rejects coin-flip entries where fair value is near 0.50).
                 best_side = edge_result.best_side
                 best_edge = edge_result.best_edge
-                ask = book.up_best_ask if best_side == "up" else book.down_best_ask
-
-                # Determine mode
+                ask = edge_result.ask_up if best_side == "up" else edge_result.ask_down
                 mode = edge_result.opportunity.value
 
-                # Spread capture check: if we hold one side, consider buying the other
-                if interval.up_shares > 0 and interval.down_shares > 0:
-                    pass  # Already have both sides
-                elif interval.up_shares > 0 or interval.down_shares > 0:
-                    held_side = "up" if interval.up_spend > interval.down_spend else "down"
-                    held_vwap = interval.up_vwap if held_side == "up" else interval.down_vwap
-                    opposite = "down" if held_side == "up" else "up"
-                    opposite_ask = book.down_best_ask if opposite == "down" else book.up_best_ask
+                # Spread capture: only if we hold one side, the edge calculator
+                # flagged SPREAD_CAPTURE, AND the paired cost is actually cheap.
+                # We no longer override NONE/DIRECTIONAL with a spread capture —
+                # the edge calculator must have classified it as SPREAD_CAPTURE.
+                if edge_result.opportunity == OpportunityType.SPREAD_CAPTURE:
+                    if interval.up_shares > 0 and interval.down_shares > 0:
+                        continue  # Already have both sides, skip
+                    elif interval.up_shares > 0 or interval.down_shares > 0:
+                        held_side = "up" if interval.up_spend > interval.down_spend else "down"
+                        held_vwap = interval.up_vwap if held_side == "up" else interval.down_vwap
+                        opposite = "down" if held_side == "up" else "up"
+                        opposite_ask = edge_result.ask_down if opposite == "down" else edge_result.ask_up
 
-                    if held_vwap + opposite_ask < config.max_paired_cost:
-                        # Switch to spread capture on the opposite side
-                        best_side = opposite
-                        ask = opposite_ask
-                        mode = "spread_capture"
-                        best_edge = (1.0 - held_vwap - opposite_ask)  # guaranteed spread
-
-                # Size the trade
-                clip_cost = config.default_clip_size * ask
-                if clip_cost > remaining_budget:
-                    shares = max(1, int(remaining_budget / max(ask, 0.01)))
-                else:
-                    shares = config.default_clip_size
-
-                if shares <= 0 or ask <= 0:
+                        if held_vwap + opposite_ask < config.max_paired_cost:
+                            best_side = opposite
+                            ask = opposite_ask
+                            mode = "spread_capture"
+                            best_edge = (1.0 - held_vwap - opposite_ask)
+                        else:
+                            continue  # Paired cost too high
+                    else:
+                        continue  # No position to hedge — can't spread capture
+                elif edge_result.opportunity == OpportunityType.NONE:
                     continue
 
-                # Simulate fill (assume we get filled at the ask with some slippage)
+                # Size the trade: compute fill price FIRST, then size to budget.
                 slippage = 0.005  # 0.5% slippage on simulated fills
                 fill_price = min(ask * (1 + slippage), 0.99)
-                cost = shares * fill_price
 
-                if cost > remaining_budget:
+                if fill_price <= 0:
                     continue
+
+                shares = min(
+                    config.default_clip_size,
+                    int(remaining_budget / fill_price),
+                )
+
+                if shares <= 0:
+                    continue
+
+                cost = shares * fill_price
 
                 # Record trade
                 trade = Trade(
